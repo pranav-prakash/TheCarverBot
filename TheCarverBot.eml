@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component jdk="JavaSE-1.6" jdk_type="JavaSDK">
+	<contentEntry url="file://$MODULE_DIR$"/>
+	<lib name="robocode.jar" scope="COMPILE">
+		<relative-module-cls project-related="jar://$PROJECT_DIR$/robocode.jar!/"/>
+	</lib>
+</component>
