@@ -1,6 +1,7 @@
 package robo;
 
 import robocode.AdvancedRobot;
+import robocode.HitByBulletEvent;
 import robocode.RobotDeathEvent;
 import robocode.ScannedRobotEvent;
 
@@ -21,6 +22,8 @@ public class TheCarver extends AdvancedRobot
 {
     private AdvancedEnemyBot enemy = new AdvancedEnemyBot();
 
+    private BulletLocation bul = new BulletLocation();
+
     private RobotPart[] parts = new RobotPart[3]; // make three parts
 
     private final static int RADAR = 0;
@@ -29,20 +32,18 @@ public class TheCarver extends AdvancedRobot
 
     private final static int TANK = 2;
 
-    private final int ONEONONE_THRESHHOLD = 3;
+    double scanWidth = -1;
+
+    private final int ONEONONE_THRESHHOLD = 1;
 
 
     /**
      * computes the absolute bearing between two points
      *
-     * @param x1
-     *            point1x
-     * @param y1
-     *            point1y
-     * @param x2
-     *            point2x
-     * @param y2
-     *            point2y
+     * @param x1 point1x
+     * @param y1 point1y
+     * @param x2 point2x
+     * @param y2 point2y
      * @return absolute bearing
      */
     public double absoluteBearing( double x1, double y1, double x2, double y2 )
@@ -79,8 +80,7 @@ public class TheCarver extends AdvancedRobot
     /**
      * Normalizes normalizes a bearing to between +180 and -180
      *
-     * @param angle
-     *            angle to normalize
+     * @param angle angle to normalize
      * @return normalized
      */
     public double normalizeBearing( double angle )
@@ -105,6 +105,7 @@ public class TheCarver extends AdvancedRobot
 
         if ( getOthers() > ONEONONE_THRESHHOLD ) // If melee
         {
+            System.out.println( "Melee Mode" );
             parts[RADAR] = new RadarMelee();
             parts[GUN] = new Gun();
             parts[TANK] = new TankMelee();
@@ -112,6 +113,7 @@ public class TheCarver extends AdvancedRobot
         else
         // If one on one
         {
+            System.out.println( "1v1 Mode" );
             parts[RADAR] = new Radar1v1();
             parts[GUN] = new Gun();
             parts[TANK] = new Tank1v1();
@@ -140,34 +142,66 @@ public class TheCarver extends AdvancedRobot
     /**
      * On robot scan
      *
-     * @param e
-     *            scanevent
+     * @param e scanevent
      */
     public void onScannedRobot( ScannedRobotEvent e )
     {
         Radar radar = (Radar)parts[RADAR];
-        if ( radar.shouldTrack( e ) )
+        if ( radar.shouldTrack( e ) || e.getName().equals( bul.getName() ) )
         {
+            if ( e.getName().equals( bul.getName() ) )
+                bul.reset();
             enemy.update( e, this );
         }
+    }
+
+
+    public void onHitByBullet( HitByBulletEvent event )
+    {
+
+        if ( getEnergy() > 30 )
+        {
+            if ( scanWidth != -1 )
+            {
+                scanWidth += 5;
+            }
+
+            bul.update( event );
+        }
+
+        System.out.println( "Ouch" );
     }
 
 
     /**
      * On death
      *
-     * @param e
-     *            deathevent
+     * @param e deathevent
      */
     public void onRobotDeath( RobotDeathEvent e )
     {
         Radar radar = (Radar)parts[RADAR];
 
-        if ( getOthers() <= ONEONONE_THRESHHOLD ) // If one on one
+        if ( getOthers() != 0
+                        && getOthers() <= ONEONONE_THRESHHOLD ) // If one on one
         {
+            System.out.println( "Switched to 1v1 mode" );
             parts[RADAR] = new Radar1v1();
             parts[GUN] = new Gun();
             parts[TANK] = new Tank1v1();
+
+            // initialize each part
+            for ( int i = 0; i < parts.length; i++ )
+            {
+                // behold, the magic of polymorphism
+                parts[i].init();
+            }
+
+        }
+
+        if ( e.getName().equals( bul.getName() ) )
+        {
+            bul.reset();
         }
 
         if ( radar.wasTracking( e ) )
@@ -188,6 +222,7 @@ public class TheCarver extends AdvancedRobot
      */
     public class RadarMelee implements Radar
     {
+
         /**
          * Initialize
          */
@@ -196,6 +231,7 @@ public class TheCarver extends AdvancedRobot
             setAdjustRadarForGunTurn( true );
             setAdjustRadarForRobotTurn( true );
             setTurnRadarRight( 3600 );
+            scanWidth = 100;
         }
 
 
@@ -204,29 +240,52 @@ public class TheCarver extends AdvancedRobot
          */
         public void move()
         {
-            double scanWidth = 36.0;
+            if ( !bul.none() && !enemy.getName().equals( bul.getName() ) )
+            {
+                // Absolute angle towards target
+                double absoluteBearing = getHeading() + bul.getBearing();
 
-            if ( enemy.none() )
+                // Subtract current radar heading to get the turn required to
+                // face the enemy, be sure it is normalized
+                double radarTurn = normalizeBearing(
+                                absoluteBearing - getRadarHeading() );
+
+                //Turn radar
+                setTurnRadarRight( radarTurn );
+            }
+            else if ( enemy.none() )
             {
                 // If no enemy currently found, keep spinning
                 setTurnRadarRight( 3600 );
+                scanWidth = 100;
             }
             else
             {
+
+                if ( getGunHeat() > 2 )
+                {
+                    scanWidth = Math.min( scanWidth + 1, 10 );
+                }
+                else if ( scanWidth > 4 )
+                {
+                    scanWidth--;
+                }
+
                 // Absolute angle towards target
                 double absoluteBearing = getHeading() + enemy.getBearing();
 
                 // Subtract current radar heading to get the turn required to
                 // face the enemy, be sure it is normalized
-                double radarTurn = normalizeBearing( absoluteBearing
-                    - getRadarHeading() );
+                double radarTurn = normalizeBearing(
+                                absoluteBearing - getRadarHeading() );
 
                 // Distance we want to scan from middle of enemy to either side
                 // scanWidth is how many units from the center of the enemy
                 // robot it scans.
-                double extraScan = Math.min( Math.atan( scanWidth
-                    / enemy.getDistance() * 180 / 3.14 ),
-                    45 );
+                double extraScan = Math.min( scanWidth + Math.atan(
+                                                scanWidth / enemy.getDistance()
+                                                                * 180 / 3.14 ),
+                                50 );
 
                 // Adjust the radar turn so it goes that much further in the
                 // direction it is going to turn
@@ -235,34 +294,35 @@ public class TheCarver extends AdvancedRobot
                 // This allows us to overshoot our enemy so that we get a good
                 // sweep that will not slip.
                 radarTurn += radarTurn >= 0 ? extraScan : -extraScan;
-                
+
                 //Turn radar
                 setTurnRadarRight( radarTurn );
 
             }
         }
 
+
         /**
          * Should track
          *
-         * @param e
-         *            robotevent
+         * @param e robotevent
          * @return is tracked
          */
         public boolean shouldTrack( ScannedRobotEvent e )
         {
             // track if we have no enemy, the one we found is significantly
             // closer, or we scanned the one we've been tracking.
-            return ( (enemy.none() || e.getDistance() < enemy.getDistance() || e.getName()
-                .equals( enemy.getName() )) && getGunHeat() < 0.5 );
+            return ( ( enemy.none() || e.getDistance() < enemy.getDistance()
+                            || ( e.getEnergy() < 40
+                            && e.getDistance() < enemy.getDistance() * 2 )
+                            || e.getName().equals( enemy.getName() ) ) );
         }
 
 
         /**
          * Check whether previously tracking
          *
-         * @param e
-         *            event
+         * @param e event
          * @return was previously tracking
          */
         public boolean wasTracking( RobotDeathEvent e )
@@ -290,29 +350,30 @@ public class TheCarver extends AdvancedRobot
          */
         public void move()
         {
-            double scanWidth = 36.0;
-            
+            double scanWidth = 1.0;
+
             if ( enemy.none() )
             {
-                //If no enemy found, keep spinning  
+                //If no enemy found, keep spinning
                 setTurnRadarRight( 3600 );
             }
             else
             {
-             // Absolute angle towards target
+                // Absolute angle towards target
                 double absoluteBearing = getHeading() + enemy.getBearing();
 
                 // Subtract current radar heading to get the turn required to
                 // face the enemy, be sure it is normalized
-                double radarTurn = normalizeBearing( absoluteBearing
-                    - getRadarHeading() );
+                double radarTurn = normalizeBearing(
+                                absoluteBearing - getRadarHeading() );
 
                 // Distance we want to scan from middle of enemy to either side
                 // scanWidth is how many units from the center of the enemy
                 // robot it scans.
-                double extraScan = Math.min( Math.atan( scanWidth
-                    / enemy.getDistance() * 180 / 3.14 ),
-                    45 );
+                double extraScan = Math.min( Math.atan(
+                                                scanWidth / enemy.getDistance()
+                                                                * 180 / 3.14 ),
+                                45 );
 
                 // Adjust the radar turn so it goes that much further in the
                 // direction it is going to turn
@@ -321,7 +382,7 @@ public class TheCarver extends AdvancedRobot
                 // This allows us to overshoot our enemy so that we get a good
                 // sweep that will not slip.
                 radarTurn += radarTurn >= 0 ? extraScan : -extraScan;
-                
+
                 //Turn radar
                 setTurnRadarRight( radarTurn );
 
@@ -332,24 +393,22 @@ public class TheCarver extends AdvancedRobot
         /**
          * Should track
          *
-         * @param e
-         *            robotevent
+         * @param e robotevent
          * @return is tracked
          */
         public boolean shouldTrack( ScannedRobotEvent e )
         {
             // track if we have no enemy, the one we found is significantly
             // closer, or we scanned the one we've been tracking.
-            return ( enemy.none() || e.getDistance() < enemy.getDistance() - 70 || e.getName()
-                .equals( enemy.getName() ) );
+            return ( enemy.none() || e.getDistance() < enemy.getDistance() - 70
+                            || e.getName().equals( enemy.getName() ) );
         }
 
 
         /**
          * Check whether previously tracking
          *
-         * @param e
-         *            event
+         * @param e event
          * @return was previously tracking
          */
         public boolean wasTracking( RobotDeathEvent e )
@@ -457,8 +516,9 @@ public class TheCarver extends AdvancedRobot
         public void move()
         {
 
-            setTurnRight( normalizeBearing( enemy.getBearing() + 90
-                - ( ( rand.nextInt( TURN_FACTOR ) + 1 ) * moveDirection ) ) );
+            setTurnRight( normalizeBearing( enemy.getBearing() + 90 - (
+                            ( rand.nextInt( TURN_FACTOR ) + 1 )
+                                            * moveDirection ) ) );
 
             if ( getTime() % ( rand.nextInt( DELAY_FACTOR ) + 1 ) == 0 )
             {
@@ -497,8 +557,9 @@ public class TheCarver extends AdvancedRobot
         public void move()
         {
 
-            setTurnRight( normalizeBearing( enemy.getBearing() + 90
-                - ( ( rand.nextInt( TURN_FACTOR ) + 1 ) * moveDirection ) ) );
+            setTurnRight( normalizeBearing( enemy.getBearing() + 90 - (
+                            ( rand.nextInt( TURN_FACTOR ) + 1 )
+                                            * moveDirection ) ) );
 
             if ( getTime() % ( rand.nextInt( DELAY_FACTOR ) + 1 ) == 0 )
             {
