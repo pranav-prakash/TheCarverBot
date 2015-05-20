@@ -4,11 +4,11 @@ import robocode.RobotDeathEvent;
 import robocode.ScannedRobotEvent;
 
 public interface Radar extends RobotPart {
-    public void init();
+    void init();
 
-    public void move();
+    void move();
 
-    public boolean shouldTrack(ScannedRobotEvent e);
+    boolean shouldTrack(ScannedRobotEvent e);
 
-    public boolean wasTracking(RobotDeathEvent e);
+    boolean wasTracking(RobotDeathEvent e);
 }

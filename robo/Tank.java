@@ -1,7 +1,7 @@
 package robo;
 
 public interface Tank extends RobotPart {
-    public void init();
+    void init();
 
-    public void move();
+    void move();
 }
