@@ -113,7 +113,7 @@ public class BulletLocation
         bearing = 0;
         power = 0;
         heading = 0;
-        velocity = 0.0;
+        //Not reseting velocity on purpose
     }
 
 

@@ -24,6 +24,10 @@ public class AdvancedEnemyBot extends EnemyBot {
      */
     private double y;
 
+    private double energy = 0;
+
+    private double previousEnergy = 0;
+
 
     /**
      * Constructor initializes values
@@ -66,6 +70,9 @@ public class AdvancedEnemyBot extends EnemyBot {
             absBearingDeg += 360;
         }
 
+        previousEnergy = energy;
+        energy = e.getEnergy();
+
         x = robot.getX() + Math.sin(Math.toRadians(absBearingDeg))
                 * e.getDistance();
         y = robot.getY() + Math.cos(Math.toRadians(absBearingDeg))
@@ -82,6 +89,18 @@ public class AdvancedEnemyBot extends EnemyBot {
         return x + Math.sin(Math.toRadians(getHeading())) * getVelocity()
                 * when;
 
+    }
+
+
+    public double getEnergy()
+    {
+        return energy;
+    }
+
+
+    public double getPreviousEnergy()
+    {
+        return previousEnergy;
     }
 
     /**
