@@ -5,6 +5,7 @@ import robocode.util.Utils;
 
 import java.awt.geom.Point2D;
 import java.awt.geom.Rectangle2D;
+import java.util.HashMap;
 import java.util.Random;
 
 
@@ -14,7 +15,7 @@ import java.util.Random;
  * @author Pranav Prakash
  * @author Period - 7
  * @author Assignment - PartsBot
- * @author Sources
+ * @author Sources LemonDrop, Acero, Robowiki
  * @version 5/14/15
  */
 public class TheCarver extends AdvancedRobot
@@ -37,24 +38,13 @@ public class TheCarver extends AdvancedRobot
 
     boolean isMeleeMode = false;
 
-    static int moveNum = 0; // number of movement to use
+    int backDir = 1; // flippable direction for when moving forward
 
-    static int bestMove = 1; // tells if the best movement has been found (1 = no, 0 = yes)
+    int aheadDir = 1; // flippable direction for when moving backwards
 
-    static double bestMove1 = 0; // tells how effective movement 1 was
+    double randHit = 1; // random number generated when hit
 
-    static double bestMove2 = 0; // tells how effective movement 2 was
-
-    static int win1 = 0; // movement 1 win counter
-
-    int backDir = 1; //change direction for moving forward
-
-    int aheadDir = 1; // change direction for moving back
-
-    double randHit = 1; // random number for movement
-
-    static int numDeathsInARow = 0;
-
+    static HashMap<String, MovementHistory> moveHistoryMap = new HashMap<String, MovementHistory>();
 
     /**
      * computes the absolute bearing between two points
@@ -121,8 +111,6 @@ public class TheCarver extends AdvancedRobot
      */
     public void run()
     {
-        System.out.println( ( moveNum < 105 ) ? "Oscillate" : "StopGo" );
-
         if ( getOthers() > ONEvONE_THRESHOLD ) // If melee
         {
             System.out.println( "Melee Mode" );
@@ -219,39 +207,58 @@ public class TheCarver extends AdvancedRobot
     // If movement is unsuccessful, switch to a new movement.
     public void onDeath( DeathEvent event )
     {
-        if ( win1 < 3 )
-        { // we'll assume if we win 3 before we lose 3, the current movement is fine
-            moveNum += ( 35 * bestMove ); // add a little bit to movement number
-        }
-        if ( moveNum < 110 )
-        { // and if we are using movement 1,
-            bestMove1 = bestMove1
-                            - enemy.getEnergy(); // record how much energy the enemy had left
-        }
-        else
-        { // and if we are using movement 2,
-            bestMove2 = bestMove2
-                            - enemy.getEnergy(); // record how much energy the enemy had left
-        }
 
+        if ( !isMeleeMode )
+        {
+            MovementHistory hist = moveHistoryMap.get( enemy.getName() );
+
+            System.out.println( ( hist.chosenMovement < 105 ) ?
+                            "Oscillate" :
+                            "StopGo" );
+
+            if ( hist.winsWithMovement1 < 3 )
+            { // we'll assume if we win 3 before we lose 3, the current movement is fine
+                hist.chosenMovement += ( 35
+                                * hist.bestMoveNotFound ); // add a little bit to movement number
+            }
+            if ( hist.chosenMovement < 110 )
+            { // and if we are using movement 1,
+                hist.move1Effectiveness = hist.move1Effectiveness
+                                - enemy.getEnergy(); // record how much energy the enemy had left
+            }
+            else
+            { // and if we are using movement 2,
+                hist.move2Effectiveness = hist.move2Effectiveness
+                                - enemy.getEnergy(); // record how much energy the enemy had left
+            }
+        }
     }
 
 
     public void onWin( WinEvent event )
     {
-        // if we win,
-        if ( moveNum < 1 )
-        { // and are using movement 1,
-            bestMove1 = bestMove1
-                            + getEnergy(); // record how much energy we had left
-            win1 += 1; // add a win to the movement 1 counter
-        }
-        else
-        { // and if we are using movement 2,
-            bestMove2 = bestMove2
-                            + getEnergy(); // record how much energy we had left
-        }
 
+        if ( !isMeleeMode )
+        {
+            // if we win,
+            MovementHistory hist = moveHistoryMap.get( enemy.getName() );
+
+            System.out.println( ( hist.chosenMovement < 105 ) ?
+                            "Oscillate" :
+                            "StopGo" );
+
+            if ( hist.chosenMovement < 1 )
+            { // and are using movement 1,
+                hist.move1Effectiveness = hist.move1Effectiveness
+                                + getEnergy(); // record how much energy we had left
+                hist.winsWithMovement1 += 1; // add a win to the movement 1 counter
+            }
+            else
+            { // and if we are using movement 2,
+                hist.move2Effectiveness = hist.move2Effectiveness
+                                + getEnergy(); // record how much energy we had left
+            }
+        }
     }
 
 
@@ -268,6 +275,7 @@ public class TheCarver extends AdvancedRobot
                         && getOthers() <= ONEvONE_THRESHOLD ) // If one on one
         {
             System.out.println( "Switched to 1v1 mode" );
+            isMeleeMode = false;
             parts[RADAR] = new Radar1v1();
             parts[GUN] = new Gun();
             parts[TANK] = new Tank1v1();
@@ -644,16 +652,24 @@ public class TheCarver extends AdvancedRobot
         public void chooseBestMovement()
         {
             // Determining Most Effective Movement
-            if ( moveNum >= 210 )
-            { // if we have died 3 times with both movements,
-                bestMove = 0; // make it so the movement type won't change
-                if ( bestMove2 > bestMove1 )
+
+            if ( moveHistoryMap.get( enemy.getName() ) == null )
+            {
+                moveHistoryMap.put( enemy.getName(), new MovementHistory() );
+            }
+
+            MovementHistory hist = moveHistoryMap.get( enemy.getName() );
+
+            if ( hist.chosenMovement >= 210 )
+            { // if we have died 3 times (to get enough sample size)
+                hist.bestMoveNotFound = 0; // You have found tentative best movement
+                if ( hist.move2Effectiveness > hist.move1Effectiveness )
                 { // else if movement 2 performed the best,
-                    moveNum = 150; // use movement 2
+                    hist.chosenMovement = 150; // use movement 2
                 }
                 else
                 { // else if movement 1 performed the best,
-                    moveNum = 0; // use movement 1
+                    hist.chosenMovement = 0; // use movement 1
                 }
             }
         }
@@ -669,8 +685,8 @@ public class TheCarver extends AdvancedRobot
 
             while ( !new Rectangle2D.Double( 19.0,
                             19.0,
-                            762.0,
-                            562.0 ).contains(
+                            getBattleFieldWidth() - 38,
+                            getBattleFieldHeight() - 38 ).contains(
                             getX() + Math.sin( goalDirection ) * 120,
                             getY() + Math.cos( goalDirection ) * 120 ) )
             {
@@ -702,8 +718,8 @@ public class TheCarver extends AdvancedRobot
 
             while ( !new Rectangle2D.Double( 20.0,
                             20.0,
-                            750.0,
-                            550.0 ).contains(
+                            getBattleFieldWidth() - 50,
+                            getBattleFieldHeight() - 50 ).contains(
                             getX() + Math.sin( goalDirection ) * 100,
                             getY() + Math.cos( goalDirection ) * 100 ) )
             {
@@ -733,20 +749,19 @@ public class TheCarver extends AdvancedRobot
 
         }
 
-
-        /**
-         * Move inspired by SuperCrazy
-         */
         public void move()
         {
             chooseBestMovement();
-            if ( moveNum < 105 )
+            MovementHistory hist = moveHistoryMap.get( enemy.getName() );
+            if ( hist.chosenMovement < 105 )
             {
-                oscillate();
-            }
-            else if ( moveNum >= 105 && moveNum < 210 )
-            {
+                //oscillate();
                 stopAndGo();
+            }
+            else if ( hist.chosenMovement >= 105 && hist.chosenMovement < 210 )
+            {
+                //stopAndGo();
+                oscillate();
             }
         }
     }
