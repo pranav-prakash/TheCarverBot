@@ -97,7 +97,6 @@ public class AdvancedEnemyBot extends EnemyBot {
         return energy;
     }
 
-
     public double getPreviousEnergy()
     {
         return previousEnergy;

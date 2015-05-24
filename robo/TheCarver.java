@@ -35,21 +35,25 @@ public class TheCarver extends AdvancedRobot
 
     private final int ONEvONE_THRESHOLD = 1;
 
-    static double[] moveEffects = new double[2];
-
-    static int[] moveLoses = new int[2];
-
-    static int[] moveWins = new int[2];
-
     boolean isMeleeMode = false;
 
-    int currentMovement = 0;
+    static int moveNum = 0; // number of movement to use
+
+    static int bestMove = 1; // tells if the best movement has been found (1 = no, 0 = yes)
+
+    static double bestMove1 = 0; // tells how effective movement 1 was
+
+    static double bestMove2 = 0; // tells how effective movement 2 was
+
+    static int win1 = 0; // movement 1 win counter
 
     int backDir = 1; //change direction for moving forward
 
     int aheadDir = 1; // change direction for moving back
 
     double randHit = 1; // random number for movement
+
+    static int numDeathsInARow = 0;
 
 
     /**
@@ -117,9 +121,7 @@ public class TheCarver extends AdvancedRobot
      */
     public void run()
     {
-        System.out.println( "Loses" + moveLoses[0] + " " + moveLoses[1] );
-        System.out.println( "Effectiveness" + moveEffects[0] + " "
-                        + moveEffects[1] );
+        System.out.println( ( moveNum < 105 ) ? "Oscillate" : "StopGo" );
 
         if ( getOthers() > ONEvONE_THRESHOLD ) // If melee
         {
@@ -217,25 +219,37 @@ public class TheCarver extends AdvancedRobot
     // If movement is unsuccessful, switch to a new movement.
     public void onDeath( DeathEvent event )
     {
-        moveLoses[currentMovement]++;
-        if ( moveLoses[currentMovement] + moveWins[currentMovement] >= 3 )
-        {
-            moveEffects[currentMovement] -=
-                            ( ( 100 - getEnergy() ) + enemy.getEnergy() ) / 2;
-            moveEffects[1 - currentMovement] +=
-                            ( ( 100 - getEnergy() ) + enemy.getEnergy() ) / 3;
+        if ( win1 < 3 )
+        { // we'll assume if we win 3 before we lose 3, the current movement is fine
+            moveNum += ( 35 * bestMove ); // add a little bit to movement number
         }
+        if ( moveNum < 110 )
+        { // and if we are using movement 1,
+            bestMove1 = bestMove1
+                            - enemy.getEnergy(); // record how much energy the enemy had left
+        }
+        else
+        { // and if we are using movement 2,
+            bestMove2 = bestMove2
+                            - enemy.getEnergy(); // record how much energy the enemy had left
+        }
+
     }
 
 
     public void onWin( WinEvent event )
     {
-        // if we win
-        moveWins[currentMovement]++;
-        if ( moveLoses[currentMovement] + moveWins[currentMovement] >= 3 )
-        {
-            moveEffects[currentMovement] +=
-                            getEnergy() + ( 100 - enemy.getEnergy() );
+        // if we win,
+        if ( moveNum < 1 )
+        { // and are using movement 1,
+            bestMove1 = bestMove1
+                            + getEnergy(); // record how much energy we had left
+            win1 += 1; // add a win to the movement 1 counter
+        }
+        else
+        { // and if we are using movement 2,
+            bestMove2 = bestMove2
+                            + getEnergy(); // record how much energy we had left
         }
 
     }
@@ -548,8 +562,7 @@ public class TheCarver extends AdvancedRobot
             // enemy.getY());
 
             // turn the gun to the predicted x,y location
-            setTurnGunRight( normalizeBearing(
-                            absDeg - getGunHeading() + Math.random() * 2 ) );
+            setTurnGunRight( normalizeBearing( absDeg - getGunHeading() ) );
 
             // if the gun is cool and we're pointed in the right direction,
             // shoot!
@@ -613,12 +626,10 @@ public class TheCarver extends AdvancedRobot
 
     public class Tank1v1 implements Tank
     {
-        double maxMovement = ( ( getX() + getY() ) / 2 + 700 )
-                        / 2; // movement number
-
-        int numEnergyDrops = 0;
 
         double direction = 1;
+
+        int startStop = 0;
 
 
         /**
@@ -633,10 +644,18 @@ public class TheCarver extends AdvancedRobot
         public void chooseBestMovement()
         {
             // Determining Most Effective Movement
-            currentMovement = ( moveEffects[1] > moveEffects[0] ) ? 1 : 0;
-            System.out.println( ( currentMovement == 0 ) ?
-                            "Oscillate" :
-                            "StopGo" );
+            if ( moveNum >= 210 )
+            { // if we have died 3 times with both movements,
+                bestMove = 0; // make it so the movement type won't change
+                if ( bestMove2 > bestMove1 )
+                { // else if movement 2 performed the best,
+                    moveNum = 150; // use movement 2
+                }
+                else
+                { // else if movement 1 performed the best,
+                    moveNum = 0; // use movement 1
+                }
+            }
         }
 
 
@@ -659,8 +678,10 @@ public class TheCarver extends AdvancedRobot
                 if ( Math.random() < .01 )
                     direction = -direction;
             }
+
             goalDirection = Utils.normalRelativeAngle(
                             goalDirection - getHeadingRadians() );
+
             setTurnRightRadians( Math.tan( goalDirection ) );
             setAhead( 100 * ( Math.abs( goalDirection ) > Math.PI / 2 ?
                             -1 :
@@ -672,40 +693,43 @@ public class TheCarver extends AdvancedRobot
 
         public void stopAndGo()
         {
-            double wallDist = Math.min( Math.min( getX(), getY() ),
-                            Math.min( getBattleFieldWidth() - getX(),
-                                            getBattleFieldHeight()
-                                                            - getY() ) ); // distance from nearest wall
 
-            if ( wallDist < 20 )
-            { // if we get close to a wall
-                setBack( 150 * backDir ); // go back a little bit
-                aheadDir *= -1; // when we continue, go the other way
-                System.out.println( "Close to a wall" );
-                return;
-            }
+            // Stop & Go
+            // Second type of movement
 
-            setTurnRight( enemy.getBearing() - 90 );
-            if ( getDistanceRemaining() == 0 )
+            double goalDirection = ( Math.toRadians( enemy.getBearing() )
+                            + getHeadingRadians() ) - Math.PI / 2;
+
+            while ( !new Rectangle2D.Double( 20.0,
+                            20.0,
+                            750.0,
+                            550.0 ).contains(
+                            getX() + Math.sin( goalDirection ) * 100,
+                            getY() + Math.cos( goalDirection ) * 100 ) )
             {
-                double ahead = ( Math.random() - 0.5D ) * enemy.getDistance()
-                                * 1.2D;
-                setAhead( ahead );
+                goalDirection = goalDirection + direction * .1;
             }
+
+            goalDirection = Utils.normalRelativeAngle(
+                            goalDirection - getHeadingRadians() );
+
+            setTurnRightRadians( Math.tan( goalDirection ) );
+            setAhead( ( 50 + Math.random() * 50 ) * (
+                            Math.abs( goalDirection ) > Math.PI / 2 ? -1 : 1 )
+                            * startStop );
 
             if ( enemy.getPreviousEnergy() > ( enemy.getEnergy() ) )
-            {
-                // if the enemy fires
-                numEnergyDrops++;
-                if ( numEnergyDrops == 3 )
-                {
-                    setMaxVelocity( 15 * Math.random()
-                                    + 5 ); // make the velocity randomized, but no less than 5
-                    setAhead( ( Math.random() * maxMovement - ( maxMovement
-                                    * .5 ) )
-                                    * randHit ); // go ahead (or behind) a random amount
+            { // if the enemy fires
+                if ( startStop == 0 )
+                { // and we arn't moving,
+                    startStop = 1; // move.
+                }
+                else
+                { // but if we are moving,
+                    startStop = 0; // stop.
                 }
             }
+
 
         }
 
@@ -715,11 +739,12 @@ public class TheCarver extends AdvancedRobot
          */
         public void move()
         {
-            if ( currentMovement == 0 )
+            chooseBestMovement();
+            if ( moveNum < 105 )
             {
                 oscillate();
             }
-            else if ( currentMovement == 1 )
+            else if ( moveNum >= 105 && moveNum < 210 )
             {
                 stopAndGo();
             }
