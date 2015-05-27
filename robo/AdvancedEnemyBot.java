@@ -63,7 +63,8 @@ public class AdvancedEnemyBot extends EnemyBot {
      * @param e     scanned event
      * @param robot robot object
      */
-    public void update(ScannedRobotEvent e, Robot robot) {
+    public void update( ScannedRobotEvent e, Robot robot, long seenTime )
+    {
         super.update(e);
         double absBearingDeg = (robot.getHeading() + e.getBearing());
         if (absBearingDeg < 0) {
@@ -121,6 +122,8 @@ public class AdvancedEnemyBot extends EnemyBot {
         super.reset();
         x = 0;
         y = 0;
+        energy = 0;
+        previousEnergy = 0;
     }
 
 }

@@ -197,7 +197,7 @@ public class TheCarver extends AdvancedRobot
                 bul.reset();
 
             //Update enemy information
-            enemy.update( e, this );
+            enemy.update( e, this, getTime() );
         }
     }
 
@@ -581,10 +581,6 @@ public class TheCarver extends AdvancedRobot
             {
                 firePower = Math.min( 500 / enemy.getDistance(), 3 );
             }
-            else if ( isMeleeMode )
-            {
-                firePower = 3;
-            }
             else
             {
                 firePower = 1.2;
@@ -695,6 +691,8 @@ public class TheCarver extends AdvancedRobot
 
         int startStop = 0;
 
+        boolean flip = false;
+
 
         /**
          * Initialize
@@ -770,7 +768,9 @@ public class TheCarver extends AdvancedRobot
             // Second type of movement
 
             double goalDirection = ( Math.toRadians( enemy.getBearing() )
-                            + getHeadingRadians() ) - Math.PI / 2;
+                            + getHeadingRadians() ) - ( flip ?
+                            -Math.PI / 2 :
+                            Math.PI / 2 );
 
             while ( !new Rectangle2D.Double( 20.0,
                             20.0,
@@ -779,7 +779,8 @@ public class TheCarver extends AdvancedRobot
                             getX() + Math.sin( goalDirection ) * 100,
                             getY() + Math.cos( goalDirection ) * 100 ) )
             {
-                goalDirection = goalDirection + direction * .1;
+                goalDirection = goalDirection - 0.1;
+                flip = !flip;
             }
 
             goalDirection = Utils.normalRelativeAngle(
