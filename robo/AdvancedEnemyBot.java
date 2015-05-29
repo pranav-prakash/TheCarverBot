@@ -13,26 +13,27 @@ import robocode.ScannedRobotEvent;
  * @author Sources
  * @version 5/12/15
  */
-public class AdvancedEnemyBot extends EnemyBot {
-    /**
-     * Private x val
-     */
+public class AdvancedEnemyBot extends EnemyBot
+{
+
+    ///Store x position
     private double x;
 
-    /**
-     * Private y val
-     */
+    ///Store y position
     private double y;
 
+    ///Store current energy
     private double energy = 0;
 
+    ///Store previous energy
     private double previousEnergy = 0;
 
 
     /**
      * Constructor initializes values
      */
-    public AdvancedEnemyBot() {
+    public AdvancedEnemyBot()
+    {
         reset();
     }
 
@@ -42,7 +43,8 @@ public class AdvancedEnemyBot extends EnemyBot {
      *
      * @return x
      */
-    public double getX() {
+    public double getX()
+    {
         return x;
     }
 
@@ -52,7 +54,8 @@ public class AdvancedEnemyBot extends EnemyBot {
      *
      * @return y
      */
-    public double getY() {
+    public double getY()
+    {
         return y;
     }
 
@@ -65,20 +68,22 @@ public class AdvancedEnemyBot extends EnemyBot {
      */
     public void update( ScannedRobotEvent e, Robot robot, long seenTime )
     {
-        super.update(e);
-        double absBearingDeg = (robot.getHeading() + e.getBearing());
-        if (absBearingDeg < 0) {
+        super.update( e );
+        double absBearingDeg = ( robot.getHeading() + e.getBearing() );
+        if ( absBearingDeg < 0 )
+        {
             absBearingDeg += 360;
         }
 
         previousEnergy = energy;
         energy = e.getEnergy();
 
-        x = robot.getX() + Math.sin(Math.toRadians(absBearingDeg))
-                * e.getDistance();
-        y = robot.getY() + Math.cos(Math.toRadians(absBearingDeg))
-                * e.getDistance();
+        x = robot.getX() + Math.sin( Math.toRadians( absBearingDeg ) )
+                        * e.getDistance();
+        y = robot.getY() + Math.cos( Math.toRadians( absBearingDeg ) )
+                        * e.getDistance();
     }
+
 
     /**
      * Gets future x
@@ -86,22 +91,35 @@ public class AdvancedEnemyBot extends EnemyBot {
      * @param when time
      * @return future x
      */
-    public double getFutureX(long when) {
-        return x + Math.sin(Math.toRadians(getHeading())) * getVelocity()
-                * when;
+    public double getFutureX( long when )
+    {
+        return x + Math.sin( Math.toRadians( getHeading() ) ) * getVelocity()
+                        * when;
 
     }
 
 
+    /**
+     * Gets current energy level
+     *
+     * @return Current energy level
+     */
     public double getEnergy()
     {
         return energy;
     }
 
+
+    /**
+     * Gets previous energy level
+     *
+     * @return previous energy level
+     */
     public double getPreviousEnergy()
     {
         return previousEnergy;
     }
+
 
     /**
      * Gets future y
@@ -109,16 +127,19 @@ public class AdvancedEnemyBot extends EnemyBot {
      * @param when time
      * @return future y
      */
-    public double getFutureY(long when) {
-        return y + Math.cos(Math.toRadians(getHeading())) * getVelocity()
-                * when;
+    public double getFutureY( long when )
+    {
+        return y + Math.cos( Math.toRadians( getHeading() ) ) * getVelocity()
+                        * when;
 
     }
+
 
     /**
      * Resets all
      */
-    public void reset() {
+    public void reset()
+    {
         super.reset();
         x = 0;
         y = 0;

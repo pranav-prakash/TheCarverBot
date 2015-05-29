@@ -3,27 +3,29 @@ package robo;
 import robocode.*;
 import robocode.util.Utils;
 
+import java.awt.*;
 import java.awt.geom.Point2D;
 import java.awt.geom.Rectangle2D;
 import java.util.HashMap;
 
 
+
 /**
  * TheCarver -- A modular bot adhering to the RoboPart Interface.
- *
+ * <p/>
  * Multi-modal radar and movement
- *
+ * <p/>
  * 1v1 Mode:
- *           Perfect lock radar with 1pt beam diameter
- *           Switches between two different movement patterns based on win rate
- *                  Randomized movement designed to counter pattern matching
- *                  Stop/go movement designed to counter linear/radial prediction
- *
+ * Perfect lock radar with 1pt beam diameter
+ * Switches between two different movement patterns based on win rate
+ * Randomized movement designed to counter pattern matching
+ * Stop/go movement designed to counter linear/radial prediction
+ * <p/>
  * Melee Mode:
- *            Corner movement
- *            Sweeping radar that chooses target based on various factors
- *                  Switches beam diameter at regular intervals
- *            Switches into 1v1 mode when necessary
+ * Corner movement
+ * Sweeping radar that chooses target based on various factors
+ * Switches beam diameter at regular intervals
+ * Switches into 1v1 mode when necessary
  *
  * @author Pranav Prakash
  * @author Period - 7
@@ -61,15 +63,6 @@ public class TheCarver extends AdvancedRobot
 
     ///Whether we are in melee mode right now
     boolean isMeleeMode = false;
-
-    /// flippable direction bit for altering direction when moving backwards
-    int backDir = 1;
-
-    /// flippable direction bit for altering direction when moving forwards
-    int aheadDir = 1;
-
-    /// Random number generated when hit to change movement
-    double randHit = 1;
 
     /// Hashmap mapping enemy to prior win statistics
     static HashMap<String, MovementHistory> moveHistoryMap = new HashMap<String, MovementHistory>();
@@ -123,6 +116,7 @@ public class TheCarver extends AdvancedRobot
      */
     public double normalizeBearing( double angle )
     {
+        //Subtracts multiples of 360 degrees until angle is between [-180, 180]
         while ( angle > 180 )
         {
             angle -= 360;
@@ -140,6 +134,15 @@ public class TheCarver extends AdvancedRobot
      */
     public void run()
     {
+        //Some sick colors to make radar/bullets appear invisible
+        Color bodyColor = new Color( 0, 0, 0 );
+        Color gunColor = new Color( 89, 115, 145 );
+        Color radarColor = new Color( 89, 115, 145 );
+        Color bulletColor = new Color( 89, 115, 145 );
+        Color scanArcColor = new Color( 89, 115, 145 );
+
+        setColors( bodyColor, gunColor, radarColor, bulletColor, scanArcColor );
+
         // If melee mode
         if ( getOthers() > ONEvONE_THRESHOLD )
         {
@@ -159,14 +162,15 @@ public class TheCarver extends AdvancedRobot
         }
 
         // initialize each part
-        for ( int i = 0; i < parts.length; i++ )
+        for ( RobotPart part : parts )
         {
             // behold, the magic of polymorphism
-            parts[i].init();
+            part.init();
         }
 
         // iterate through each part, moving them as we go
-        for ( int i = 0; true; i = ( i + 1 ) % parts.length )
+        int i = 0;
+        while ( true )
         {
             // polymorphism galore!
             parts[i].move();
@@ -174,6 +178,7 @@ public class TheCarver extends AdvancedRobot
             {
                 execute();
             }
+            i = ( i + 1 ) % parts.length;
         }
     }
 
@@ -192,7 +197,8 @@ public class TheCarver extends AdvancedRobot
         // or (for Melee mode) if it is the bot that shot at you
         if ( radar.shouldTrack( e ) || e.getName().equals( bul.getName() ) )
         {
-            //Reset volatile bullet info (no longer needed as you have found your enemy)
+            //Reset volatile bullet info
+            // (no longer needed as you have found your enemy)
             if ( e.getName().equals( bul.getName() ) )
                 bul.reset();
 
@@ -202,28 +208,39 @@ public class TheCarver extends AdvancedRobot
     }
 
 
+    /**
+     * Action to take when bullet hits me
+     *
+     * @param event HitByBulletEvent
+     */
     public void onHitByBullet( HitByBulletEvent event )
     {
+        //Increase scan width so that (in Melee mode) robots are easier to find
         if ( getEnergy() > 30 )
         {
             if ( scanWidth != -1 )
                 scanWidth += 5;
+            //Update bullet information (velocity, bearing, etc.)
             bul.update( event );
         }
 
+        //Get out of the way
         setAhead( 100 );
 
-        //aheadDir *= -1; // change direction
-        randHit *= ( Math.random() + 5 )
-                        * aheadDir; // generate new random number if hit
-
+        //Debugging information
         System.out.println( "Ouch. Speed:" + bul.getVelocity() );
 
     }
 
 
+    /**
+     * Action to take when you hit another robot
+     *
+     * @param e HitRobotEvent
+     */
     public void onHitRobot( HitRobotEvent e )
     {
+        //Fire with maximum power since we are head to head
         double turnGunAmt = normalizeBearing(
                         e.getBearing() + getHeading() - getGunHeading() );
         turnGunRight( turnGunAmt );
@@ -231,83 +248,118 @@ public class TheCarver extends AdvancedRobot
     }
 
 
+    /**
+     * Action to take if we hit a wall
+     *
+     * @param event HitWallEvent
+     */
     public void onHitWall( HitWallEvent event )
     {
-        // if we hit a wall reverse direction
-        randHit *= ( Math.random() + 5 ) * aheadDir;
-        backDir *= -1;
+        //Should never happen
+        System.out.println( "Ouch. I hit a wall" );
     }
 
 
-    // If movement is unsuccessful, switch to a new movement.
+    /**
+     * Behavior to take when robot dies
+     * <p/>
+     * <p/>
+     * Source: Robocode LemonDropBot
+     * github.com/axelson/ICS606-Robocode/
+     *
+     * @param event DeathEvent
+     */
     public void onDeath( DeathEvent event )
     {
+        // If movement is unsuccessful, switch to a new movement.
 
-        if ( !isMeleeMode )
+        if ( !isMeleeMode ) //Only switch movement if we lose in 1v1 mode
         {
+            //Get the previous win rates against current enemy
             MovementHistory hist = moveHistoryMap.get( enemy.getName() );
 
+            //Debugging info
             System.out.println( ( hist.chosenMovement < 105 ) ?
                             "Oscillate" :
                             "StopGo" );
 
+            //If we lose and haven't won three with movement 1 yet,
+            // gradually switch to movement 2
             if ( hist.winsWithMovement1 < 3 )
-            { // we'll assume if we win 3 before we lose 3, the current movement is fine
-                hist.chosenMovement += ( 35
-                                * hist.bestMoveNotFound ); // add a little bit to movement number
+            {
+                hist.chosenMovement += ( 35 * hist.bestMoveNotFound );
+                // Increase movement number if we haven't found best movement
+                // yet (when bestMoveNotFound = 1)
             }
-            if ( hist.chosenMovement < 110 )
-            { // and if we are using movement 1,
-                hist.move1Effectiveness = hist.move1Effectiveness
-                                - enemy.getEnergy(); // record how much energy the enemy had left
+
+            //Update win frequencies
+            if ( hist.chosenMovement < 110 )    // If we are using movement 1
+            {
+                hist.move1Effectiveness =
+                                hist.move1Effectiveness - enemy.getEnergy();
+                // record how much energy the enemy had left
             }
-            else
-            { // and if we are using movement 2,
-                hist.move2Effectiveness = hist.move2Effectiveness
-                                - enemy.getEnergy(); // record how much energy the enemy had left
-            }
-        }
-    }
-
-
-    public void onWin( WinEvent event )
-    {
-
-        if ( !isMeleeMode )
-        {
-            // if we win,
-            MovementHistory hist = moveHistoryMap.get( enemy.getName() );
-
-            System.out.println( ( hist.chosenMovement < 105 ) ?
-                            "Oscillate" :
-                            "StopGo" );
-
-            if ( hist.chosenMovement < 1 )
-            { // and are using movement 1,
-                hist.move1Effectiveness = hist.move1Effectiveness
-                                + getEnergy(); // record how much energy we had left
-                hist.winsWithMovement1 += 1; // add a win to the movement 1 counter
-            }
-            else
-            { // and if we are using movement 2,
-                hist.move2Effectiveness = hist.move2Effectiveness
-                                + getEnergy(); // record how much energy we had left
+            else // and if we are using movement 2
+            {
+                hist.move2Effectiveness =
+                                hist.move2Effectiveness - enemy.getEnergy();
+                // record how much energy the enemy had left
             }
         }
     }
 
 
     /**
-     * On death
+     * Behavior to take when robot wins
+     * <p/>
+     * Source: Robocode LemonDropBot
+     * github.com/axelson/ICS606-Robocode/
      *
-     * @param e deathevent
+     * @param event DeathEvent
+     */
+    public void onWin( WinEvent event )
+    {
+        // If movement is successful, increment current movement effectiveness
+
+        if ( !isMeleeMode ) //Only record data  if we win in 1v1 mode
+        {
+            //Get the previous win rates against current enemy
+            MovementHistory hist = moveHistoryMap.get( enemy.getName() );
+
+            //Debugging info
+            System.out.println( ( hist.chosenMovement < 105 ) ?
+                            "Oscillate" :
+                            "StopGo" );
+
+            if ( hist.chosenMovement < 1 )  // and are using movement 1
+            {
+                // record how much energy we had left
+                hist.move1Effectiveness = hist.move1Effectiveness + getEnergy();
+
+                // add a win to the movement 1 counter
+                hist.winsWithMovement1 += 1;
+            }
+            else // and if we are using movement 2
+            {
+                // record how much energy we had left
+                hist.move2Effectiveness = hist.move2Effectiveness + getEnergy();
+            }
+        }
+    }
+
+
+    /**
+     * When an enemy robot dies
+     *
+     * @param e RobotDeathEvent
      */
     public void onRobotDeath( RobotDeathEvent e )
     {
+        //Downcast to a Radar object
         Radar radar = (Radar)parts[RADAR];
 
-        if ( getOthers() != 0
-                        && getOthers() <= ONEvONE_THRESHOLD ) // If one on one
+        // If it is now 1v1, switch out parts
+        if ( getOthers() != 0 && getOthers() <= ONEvONE_THRESHOLD )
         {
             System.out.println( "Switched to 1v1 mode" );
             isMeleeMode = false;
@@ -316,19 +368,21 @@ public class TheCarver extends AdvancedRobot
             parts[TANK] = new Tank1v1();
 
             // initialize each part
-            for ( int i = 0; i < parts.length; i++ )
+            for ( RobotPart part : parts )
             {
                 // behold, the magic of polymorphism
-                parts[i].init();
+                part.init();
             }
 
         }
 
+        //If the robot that died was the one that hit us, reset
         if ( e.getName().equals( bul.getName() ) )
         {
             bul.reset();
         }
 
+        //If the robot that died was our current enemy, reset
         if ( radar.wasTracking( e ) )
         {
             enemy.reset();
@@ -342,17 +396,19 @@ public class TheCarver extends AdvancedRobot
      * @author Pranav Prakash
      * @author Period: 7
      * @author Assignment: Robo05PartsBot
-     * @author Sources
+     * @author Source: RoboWiki Perfect Width Lock Radar
+     *         http://robowiki.net/wiki/One_on_One_Radar
      * @version May 14, 2015
      */
     public class RadarMelee implements Radar
     {
 
         /**
-         * Initialize
+         * Initialize variables and call needed methods
          */
         public void init()
         {
+            //Initialize variables
             setAdjustRadarForGunTurn( true );
             setAdjustRadarForRobotTurn( true );
             setTurnRadarRight( 3600 );
@@ -361,10 +417,12 @@ public class TheCarver extends AdvancedRobot
 
 
         /**
-         * move
+         * Movement for radar
          */
         public void move()
         {
+            //If we have not found our enemy
+            // (either through stored EnemyBot or through last bullet info)
             if ( !bul.none() && !enemy.getName().equals( bul.getName() ) )
             {
                 // Absolute angle towards target
@@ -384,25 +442,29 @@ public class TheCarver extends AdvancedRobot
                 setTurnRadarRight( 3600 );
                 scanWidth = 100;
             }
-            else
+            else  // If no enemy currently found, keep spinning
             {
-
+                //If our gun heat is too high, we can't shoot
+                // anyway so keep searching for best enemy
                 if ( getGunHeat() > 2 )
                 {
+                    //Keep increasing scanwidth to find enemies faster
                     scanWidth = Math.min( scanWidth + 1, 10 );
                 }
                 else if ( scanWidth > 4 )
                 {
+                    //Else if we have locked onto a bot,
+                    // gradually narrow beam width
                     scanWidth--;
                 }
 
                 // Absolute angle towards target
-                double absoluteBearing = getHeading() + enemy.getBearing();
+                double enemyHeading = getHeading() + enemy.getBearing();
 
                 // Subtract current radar heading to get the turn required to
                 // face the enemy, be sure it is normalized
                 double radarTurn = normalizeBearing(
-                                absoluteBearing - getRadarHeading() );
+                                enemyHeading - getRadarHeading() );
 
                 // Distance we want to scan from middle of enemy to either side
                 // scanWidth is how many units from the center of the enemy
@@ -445,7 +507,8 @@ public class TheCarver extends AdvancedRobot
 
 
         /**
-         * Check whether previously tracking
+         * Used to check whether robot that died
+         * was the one that you are tracking
          *
          * @param e event
          * @return was previously tracking
@@ -457,10 +520,20 @@ public class TheCarver extends AdvancedRobot
     }
 
 
+    /**
+     * 1v1 Radar
+     *
+     * @author Pranav Prakash
+     * @author Period: 7
+     * @author Assignment: Robo05PartsBot
+     * @author Source: RoboWiki Perfect Width Lock Radar
+     *         http://robowiki.net/wiki/One_on_One_Radar
+     * @version May 14, 2015
+     */
     public class Radar1v1 implements Radar
     {
         /**
-         * Initialize
+         * Initializes by calling needed methods
          */
         public void init()
         {
@@ -471,10 +544,11 @@ public class TheCarver extends AdvancedRobot
 
 
         /**
-         * move
+         * Movement for 1v1 radar
          */
         public void move()
         {
+            ///Stores the scan width
             double scanWidth = 1.0;
 
             if ( enemy.none() )
@@ -485,12 +559,12 @@ public class TheCarver extends AdvancedRobot
             else
             {
                 // Absolute angle towards target
-                double absoluteBearing = getHeading() + enemy.getBearing();
+                double enemyHeading = getHeading() + enemy.getBearing();
 
                 // Subtract current radar heading to get the turn required to
                 // face the enemy, be sure it is normalized
                 double radarTurn = normalizeBearing(
-                                absoluteBearing - getRadarHeading() );
+                                enemyHeading - getRadarHeading() );
 
                 // Distance we want to scan from middle of enemy to either side
                 // scanWidth is how many units from the center of the enemy
@@ -518,7 +592,7 @@ public class TheCarver extends AdvancedRobot
         /**
          * Should track
          *
-         * @param e robotevent
+         * @param e ScannedRobotEvent
          * @return is tracked
          */
         public boolean shouldTrack( ScannedRobotEvent e )
@@ -533,11 +607,12 @@ public class TheCarver extends AdvancedRobot
         /**
          * Check whether previously tracking
          *
-         * @param e event
+         * @param e RobotDeathEvent
          * @return was previously tracking
          */
         public boolean wasTracking( RobotDeathEvent e )
         {
+            // checks if robot that died is robot we targeted
             return e.getName().equals( enemy.getName() );
         }
     }
@@ -549,7 +624,7 @@ public class TheCarver extends AdvancedRobot
      * @author Pranav Prakash
      * @author Period: 7
      * @author Assignment: Robo05PartsBot
-     * @author Sources
+     * @author Sources: PartsBot
      * @version May 14, 2015
      */
     public class Gun implements RobotPart
@@ -565,24 +640,28 @@ public class TheCarver extends AdvancedRobot
 
 
         /**
-         * Move
+         * Handle gun movement and shooting
          */
         public void move()
         {
             // don't shoot if I've got no enemy
             if ( enemy.none() )
             {
+                // exit method
                 return;
             }
 
-            // calculate firepower based on distance
+            // calculate fire-power based on distance
             double firePower;
+
             if ( getEnergy() > 20 )
             {
+                //Scale your energy
                 firePower = Math.min( 500 / enemy.getDistance(), 3 );
             }
             else
             {
+                //If you are low on energy, keep it at a low firepower
                 firePower = 1.2;
             }
 
@@ -596,9 +675,6 @@ public class TheCarver extends AdvancedRobot
             double futureY = enemy.getFutureY( time );
 
             double absDeg = absoluteBearing( getX(), getY(), futureX, futureY );
-            // non-predictive firing can be done like this:
-            // double absDeg = absoluteBearing(getX(), getY(), enemy.getX(),
-            // enemy.getY());
 
             // turn the gun to the predicted x,y location
             setTurnGunRight( normalizeBearing( absDeg - getGunHeading() ) );
@@ -614,28 +690,36 @@ public class TheCarver extends AdvancedRobot
 
 
     /**
-     * Robot tank
+     * Tank movement for Melee mode
      *
      * @author Pranav Prakash
      * @author Period: 7
      * @author Assignment: Robo05PartsBot
-     * @author Sources
+     * @author Sources: Robocode Lib Nanobot
+     *         http://robowiki.net/wiki/CornerMovement
      * @version May 14, 2015
      */
     public class TankMelee implements Tank
     {
+        //Stores the length of our movement pattern
         private final int PATTERN_LENGTH = 8;
 
-        //These are the coordinates of our corner movement (if it was in the lower-left corner).
-        //The length of these strings should be PATTERN_LENGTH and Lib should have to change
-        //directions (as in forward or reverse) for each point.
+        //These are the coordinates of
+        // our corner movement (if it was in the lower-left corner).
+
+        //Can be flipped as necessary for other corners
+        //Change directions (as in forward or reverse) for each point.
         private final int[] xcoords = { 30, 30, 90, 30, 150, 150, 30, 210 };
 
         private final int[] ycoords = { 30, 210, 30, 150, 150, 30, 90, 30 };
 
-        //this will normalize to PI/2, but it is big enough that I can use it for setAhead, too.
-        private double direction = 41 * Math.PI / 2;
+        //Store flippable direction
+        private double direction = Math.PI / 2;
 
+        //Distance to move with each stride
+        private double moveDist = 64.4;
+
+        //Store current index in movement pattern
         int index = 0;
 
 
@@ -644,53 +728,68 @@ public class TheCarver extends AdvancedRobot
          */
         public void init()
         {
-
+            //Nothing to initialize here
         }
 
 
         /**
-         * Move
+         * Move the tank as per the pattern
          */
         public void move()
         {
-            double goalY = ycoords[index];
+            //Find and flip y coordinate based on closest corner
+            double goalY = ( getY() > getBattleFieldHeight() / 2 ) ?
+                            getBattleFieldHeight() - ycoords[index] :
+                            ycoords[index];
 
-            double curY = getY();
+            //Find and flip x coordinate based on closest corner
+            double goalX = ( getX() > getBattleFieldWidth() / 2 ) ?
+                            getBattleFieldWidth() - xcoords[index] :
+                            xcoords[index];
 
-            if ( curY > 500 )
-                goalY = getBattleFieldHeight() - goalY;
-
-            double goalX = xcoords[index];
-
-            double curX = getX();
-            if ( curX > 500 )
-                goalX = getBattleFieldWidth() - goalX;
-
-            if ( Point2D.distance( goalX, goalY, curX, curY ) < 10 )
+            if ( Point2D.distance( goalX, goalY, getX(), getY() ) < 10 )
             {
+                //If you have pretty much arrived
+                // at your destination move on to next point
                 direction = -direction;
+                moveDist = -moveDist;
                 index = ( index + 1 ) % PATTERN_LENGTH;
             }
 
-            setAhead( direction );
+            setAhead( moveDist );
 
-            setAhead( getTurnRemainingRadians() == 0 ? direction : 0 );
+            setAhead( getTurnRemainingRadians() == 0 ? moveDist : 0 );
 
-            setTurnRightRadians( robocode.util.Utils.normalRelativeAngle(
-                            Math.atan2( goalX - curX, goalY - curY )
-                                            + Math.PI / 2 - direction
+            //Turn, accounting for direction flip by adding 180 degrees
+            setTurnRightRadians( Utils.normalRelativeAngle(
+                            Math.atan2( goalX - getX(), goalY - getY() ) + Math.PI / 2 - direction
                                             - getHeadingRadians() ) );
         }
     }
 
 
+    /**
+     * Tank movement for Melee mode
+     *
+     * @author Pranav Prakash
+     * @author Period: 7
+     * @author Assignment: Robo05PartsBot
+     * @author Source 1: Robocode Acero Nanobot
+     *         http://robowiki.net/wiki/Acero
+     * @author Source 2: Robocode LemonDropBot
+     *         github.com/axelson/ICS606-Robocode/
+     * @version May 14, 2015
+     */
     public class Tank1v1 implements Tank
     {
 
+        //Used to store current direction (forwards or backwards)
         double direction = 1;
 
+        //Used in stop-go movement to store current state
         int startStop = 0;
 
+        //Used in stop-go movement to flip forwards-backwards on wall hit
         boolean flip = false;
 
 
@@ -703,40 +802,64 @@ public class TheCarver extends AdvancedRobot
         }
 
 
+        /**
+         * Choose best movement based on prior statistics
+         * <p/>
+         * Source: Robocode LemonDropBot
+         * github.com/axelson/ICS606-Robocode/
+         */
         public void chooseBestMovement()
         {
             // Determining Most Effective Movement
 
+            //If we have no information for current enemy, create one
             if ( moveHistoryMap.get( enemy.getName() ) == null )
             {
                 moveHistoryMap.put( enemy.getName(), new MovementHistory() );
             }
 
+            //Get movement information
             MovementHistory hist = moveHistoryMap.get( enemy.getName() );
 
+            // if we have died 3 times with current movement,
+            // time to consider switching
             if ( hist.chosenMovement >= 210 )
-            { // if we have died 3 times (to get enough sample size)
-                hist.bestMoveNotFound = 0; // You have found tentative best movement
+            {
+                // You have found tentative best movement
+                hist.bestMoveNotFound = 0;
+
                 if ( hist.move2Effectiveness > hist.move1Effectiveness )
-                { // else if movement 2 performed the best,
+                {   //if movement 2 performed the best
                     hist.chosenMovement = 150; // use movement 2
                 }
                 else
-                { // else if movement 1 performed the best,
+                {
+                    // if movement 1 performed the best
                     hist.chosenMovement = 0; // use movement 1
                 }
             }
         }
 
 
+        /**
+         * Move randomly in order to counter pattern matching
+         *
+         * Source: Robocode Acero Nanobot
+         * http://robowiki.net/wiki/Acero
+         */
         public void oscillate()
         {
+
+            //Turn perpendicular to enemy, maintaining distance at 600
             double goalDirection = ( Math.toRadians( enemy.getBearing() )
                             + getHeadingRadians() ) -
                             ( Math.PI / 2 + ( ( enemy.getDistance() ) >= 600 ?
                                             0 :
                                             0.4 ) ) * direction;
 
+            //Wall smoothing code
+
+            //If you are going to intersect wall in current path
             while ( !new Rectangle2D.Double( 19.0,
                             19.0,
                             getBattleFieldWidth() - 38,
@@ -744,34 +867,56 @@ public class TheCarver extends AdvancedRobot
                             getX() + Math.sin( goalDirection ) * 120,
                             getY() + Math.cos( goalDirection ) * 120 ) )
             {
+                //Turn a little bit towards the enemy
                 goalDirection = goalDirection + direction * .1;
+
+                //But sometimes turn the other direction
+                // to not be as predictable
                 if ( Math.random() < .01 )
                     direction = -direction;
             }
 
+            //Normalize direction
             goalDirection = Utils.normalRelativeAngle(
                             goalDirection - getHeadingRadians() );
 
+            //Use tan function to get a periodic oscillator
+            // that is more irregular than sin or cos
             setTurnRightRadians( Math.tan( goalDirection ) );
+
+            //If angle to enemy becomes too steep move the other direction
             setAhead( 100 * ( Math.abs( goalDirection ) > Math.PI / 2 ?
                             -1 :
                             1 ) );
+
+            //Random direction swapping
             if ( Math.random() < .04 )
                 direction = -direction;
         }
 
 
+        /**
+         * Move start/stop to counter linear+circular targeting
+         *
+         * Source: Robocode Acero Nanobot
+         * http://robowiki.net/wiki/Acero
+         */
         public void stopAndGo()
         {
 
             // Stop & Go
             // Second type of movement
 
+            // Square off (perpendicular) against enemy
+            // flipping if necessary (to back out from walls)
             double goalDirection = ( Math.toRadians( enemy.getBearing() )
                             + getHeadingRadians() ) - ( flip ?
                             -Math.PI / 2 :
                             Math.PI / 2 );
 
+            // Wall smoothing code
+
+            //If you are going to intersect wall in current path
             while ( !new Rectangle2D.Double( 20.0,
                             20.0,
                             getBattleFieldWidth() - 50,
@@ -779,22 +924,34 @@ public class TheCarver extends AdvancedRobot
                             getX() + Math.sin( goalDirection ) * 100,
                             getY() + Math.cos( goalDirection ) * 100 ) )
             {
+                //Turn a little bit towards the enemy
                 goalDirection = goalDirection - 0.1;
+
+                //Indicate that we need to change our goal direction to back out
                 flip = !flip;
             }
 
+            //Normalize direction
             goalDirection = Utils.normalRelativeAngle(
                             goalDirection - getHeadingRadians() );
 
+            //Use tan periodicity to make it not so easy to predict
             setTurnRightRadians( Math.tan( goalDirection ) );
+
+            //Does three things:
+
+            //Choose random dist (min 50) in your start-stop movements
+            //Avoid becoming too parallel to enemy (angle to steep)
+            //Only move if startStop = 1
             setAhead( ( 50 + Math.random() * 50 ) * (
                             Math.abs( goalDirection ) > Math.PI / 2 ? -1 : 1 )
                             * startStop );
 
+            //When we detect an energy drop, assume bullet fired
             if ( enemy.getPreviousEnergy() > ( enemy.getEnergy() ) )
             { // if the enemy fires
                 if ( startStop == 0 )
-                { // and we arn't moving,
+                { // and we aren't moving,
                     startStop = 1; // move.
                 }
                 else
@@ -806,6 +963,13 @@ public class TheCarver extends AdvancedRobot
         }
 
 
+        /**
+         * Dispatches to appropriate move method
+         * based on currently chosen movement
+         *
+         * Source: Robocode LemonDropBot
+         * github.com/axelson/ICS606-Robocode/
+         */
         public void move()
         {
             chooseBestMovement();

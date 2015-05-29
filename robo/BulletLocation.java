@@ -4,7 +4,7 @@ import robocode.HitByBulletEvent;
 
 
 /**
- * Record the state of an enemy bot.
+ * Record the state of impacted bullet (that hit you)
  *
  * @author Pranav Prakash
  * @author Period - 7
@@ -14,19 +14,24 @@ import robocode.HitByBulletEvent;
  */
 public class BulletLocation
 {
+    ///Stores bullet bearing
     private double bearing;
 
+    ///Stores power of received bullet
     private double power;
 
+    ///Stores heading
     private double heading;
 
+    ///Stores velocity
     private double velocity;
 
+    ///Stores name
     private String name;
 
 
     /**
-     * Constructor for enemy bot
+     * Constructor for BulletLocation
      */
     public BulletLocation()
     {

@@ -13,11 +13,11 @@ public interface RobotPart {
     /**
      * Initialize
      */
-    public void init();
+    void init();
 
 
     /**
      * Move
      */
-    public void move();
+    void move();
 }

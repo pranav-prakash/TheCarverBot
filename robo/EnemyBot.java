@@ -2,6 +2,7 @@ package robo;
 
 import robocode.ScannedRobotEvent;
 
+
 /**
  * Record the state of an enemy bot.
  *
@@ -11,27 +12,43 @@ import robocode.ScannedRobotEvent;
  * @author Sources
  * @version 5/8/15
  */
-public class EnemyBot {
+public class EnemyBot
+{
+    ///Stores bearing
     private double bearing;
+
+    ///Stores distance
     private double distance;
+
+    ///Stores energy
     private double energy;
+
+    ///Stores heading
     private double heading;
+
+    ///Stores velocity
     private double velocity;
+
+    ///Stores name
     private String name;
+
 
     /**
      * Constructor for enemy bot
      */
-    public EnemyBot() {
+    public EnemyBot()
+    {
         reset();
     }
+
 
     /**
      * Gets bearing
      *
      * @return bearing
      */
-    public double getBearing() {
+    public double getBearing()
+    {
         return bearing;
     }
 
@@ -41,7 +58,8 @@ public class EnemyBot {
      *
      * @return distance
      */
-    public double getDistance() {
+    public double getDistance()
+    {
         return distance;
     }
 
@@ -51,7 +69,8 @@ public class EnemyBot {
      *
      * @return energy
      */
-    public double getEnergy() {
+    public double getEnergy()
+    {
         return energy;
     }
 
@@ -61,7 +80,8 @@ public class EnemyBot {
      *
      * @return heading
      */
-    public double getHeading() {
+    public double getHeading()
+    {
         return heading;
     }
 
@@ -71,7 +91,8 @@ public class EnemyBot {
      *
      * @return velocity
      */
-    public double getVelocity() {
+    public double getVelocity()
+    {
         return velocity;
     }
 
@@ -81,7 +102,8 @@ public class EnemyBot {
      *
      * @return name
      */
-    public String getName() {
+    public String getName()
+    {
         return name;
     }
 
@@ -91,7 +113,8 @@ public class EnemyBot {
      *
      * @param srEvt event
      */
-    public void update(ScannedRobotEvent srEvt) {
+    public void update( ScannedRobotEvent srEvt )
+    {
         bearing = srEvt.getBearing();
         distance = srEvt.getDistance();
         energy = srEvt.getEnergy();
@@ -104,7 +127,8 @@ public class EnemyBot {
     /**
      * Resets all
      */
-    public void reset() {
+    public void reset()
+    {
         name = "";
         bearing = 0;
         distance = 0;
@@ -119,7 +143,8 @@ public class EnemyBot {
      *
      * @return Whether cleared
      */
-    public boolean none() {
+    public boolean none()
+    {
         return name.length() == 0;
     }
 }
