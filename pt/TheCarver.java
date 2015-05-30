@@ -1,4 +1,4 @@
-package robo;
+package pt;
 
 import robocode.*;
 import robocode.util.Utils;
@@ -428,12 +428,12 @@ public class TheCarver extends AdvancedRobot
             if ( !bul.none() && !enemy.getName().equals( bul.getName() ) )
             {
                 // Absolute angle towards target
-                double absoluteBearing = getHeading() + bul.getBearing();
+                double enemyHeading = getHeading() + bul.getBearing();
 
                 // Subtract current radar heading to get the turn required to
                 // face the enemy, be sure it is normalized
                 double radarTurn = normalizeBearing(
-                                absoluteBearing - getRadarHeading() );
+                                enemyHeading - getRadarHeading() );
 
                 //Turn radar
                 setTurnRadarRight( radarTurn );
@@ -643,9 +643,9 @@ public class TheCarver extends AdvancedRobot
 
         /**
          * Handle gun movement and shooting
-         *
+         * <p/>
          * Source: IBM Robocode Secrets
-         *         ibm.com/developerworks/library/j-circular/
+         * ibm.com/developerworks/library/j-circular/
          */
         public void move()
         {

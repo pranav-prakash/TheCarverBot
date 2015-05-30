@@ -1,4 +1,4 @@
-package robo;
+package pt;
 
 import robocode.ScannedRobotEvent;
 

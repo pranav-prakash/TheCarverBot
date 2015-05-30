@@ -1,4 +1,4 @@
-package robo;
+package pt;
 
 /**
  * Stores prior win statistics

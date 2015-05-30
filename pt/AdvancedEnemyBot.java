@@ -1,4 +1,4 @@
-package robo;
+package pt;
 
 import robocode.Robot;
 import robocode.ScannedRobotEvent;
@@ -33,7 +33,7 @@ public class AdvancedEnemyBot extends EnemyBot
     private long lastSeenTime = 0;
 
     ///Stores the previous heading
-    // originally set to infinity to signify uninitialization
+    // originally set to infinity to signify uninitializated state
     private double prevHeadingRadians = Double.POSITIVE_INFINITY;
 
     ///Stores the change in heading (in radians) enemy made
@@ -44,6 +44,7 @@ public class AdvancedEnemyBot extends EnemyBot
 
     ///Store whether current movement is classified as linear
     private boolean isLinear = true;
+
 
     /**
      * Constructor initializes values
@@ -57,8 +58,8 @@ public class AdvancedEnemyBot extends EnemyBot
     /**
      * Update all values
      *
-     * @param e     scanned event
-     * @param robot robot object
+     * @param e        scanned event
+     * @param robot    robot object
      * @param lastSeen event time
      */
     public void update( ScannedRobotEvent e, Robot robot, long lastSeen )
@@ -202,8 +203,11 @@ public class AdvancedEnemyBot extends EnemyBot
 
     public double getFutureYCircular( long when )
     {
+        // (theta/time) * time gives delta theta, or total heading change
         double totalHeadingChange = when * headingChange;
 
+        //Comes as a result of integrating
+        //Integrate[enemyVelocity * Cos[initialHeading + turnRate*n], {n, 0, t}]
         return y + ( Math.sin( Math.toRadians( getHeading() ) ) * radius ) - (
                         Math.sin( Math.toRadians( getHeading() )
                                         + totalHeadingChange ) * radius );
@@ -212,9 +216,12 @@ public class AdvancedEnemyBot extends EnemyBot
 
     public double getFutureXCircular( long when )
     {
-
+        // (theta/time) * time gives delta theta, or total heading change
         double totalHeadingChange = when * headingChange;
 
+        //Comes as a result of integrating
+        //Integrate[enemyVelocity * Sin[initialHeading + turnRate*n], {n, 0, t}]
+        //plus starting position which is x
         return x + ( Math.cos( Math.toRadians( getHeading() ) ) * radius ) - (
                         Math.cos( Math.toRadians( getHeading() )
                                         + totalHeadingChange ) * radius );
