@@ -9,7 +9,6 @@ import java.awt.geom.Rectangle2D;
 import java.util.HashMap;
 
 
-
 /**
  * TheCarver -- A modular bot adhering to the RoboPart Interface.
  * <p/>
@@ -63,6 +62,9 @@ public class TheCarver extends AdvancedRobot
 
     ///Whether we are in melee mode right now
     boolean isMeleeMode = false;
+
+    ///Check whether our current movement schema is the first one (Oscillating)
+    boolean isMovementOne = true;
 
     /// Hashmap mapping enemy to prior win statistics
     static HashMap<String, MovementHistory> moveHistoryMap = new HashMap<String, MovementHistory>();
@@ -135,11 +137,11 @@ public class TheCarver extends AdvancedRobot
     public void run()
     {
         //Some sick colors to make radar/bullets appear invisible
-        Color bodyColor = new Color( 0, 0, 0 );
-        Color gunColor = new Color( 89, 115, 145 );
-        Color radarColor = new Color( 89, 115, 145 );
-        Color bulletColor = new Color( 89, 115, 145 );
-        Color scanArcColor = new Color( 89, 115, 145 );
+        Color bodyColor = new Color( 61, 66, 96 );
+        Color gunColor = new Color( 61, 66, 96 );
+        Color radarColor = new Color( 61, 66, 96 );
+        Color bulletColor = new Color( 61, 66, 96 );
+        Color scanArcColor = new Color( 61, 66, 96 );
 
         setColors( bodyColor, gunColor, radarColor, bulletColor, scanArcColor );
 
@@ -228,7 +230,7 @@ public class TheCarver extends AdvancedRobot
         setAhead( 100 );
 
         //Debugging information
-        System.out.println( "Ouch. Speed:" + bul.getVelocity() );
+        //System.out.println( "Ouch. Speed:" + bul.getVelocity() );
 
     }
 
@@ -641,6 +643,9 @@ public class TheCarver extends AdvancedRobot
 
         /**
          * Handle gun movement and shooting
+         *
+         * Source: IBM Robocode Secrets
+         *         ibm.com/developerworks/library/j-circular/
          */
         public void move()
         {
@@ -652,32 +657,68 @@ public class TheCarver extends AdvancedRobot
             }
 
             // calculate fire-power based on distance
-            double firePower;
+            // 3 is maximum firepower for robot
+            // 1.2 is a good average low-power constant value
+            double firePower = ( getEnergy() > 20 ) ?
+                            Math.min( 500 / enemy.getDistance(), 3 ) :
+                            1.2;
 
-            if ( getEnergy() > 20 )
+            //Use linear prediction if we are oscillating
+            // or enemy movement is locally linear
+            if ( enemy.isLinear() || isMovementOne )
             {
-                //Scale your energy
-                firePower = Math.min( 500 / enemy.getDistance(), 3 );
+                // calculate speed of bullet
+                double bulletSpeed = 20 - firePower * 3;
+                // distance = rate * time, solved for time
+                long time = (long)( enemy.getDistance() / bulletSpeed );
+
+                // calculate gun turn to predicted x,y location
+                double futureX = enemy.getFutureXLinear( time );
+                double futureY = enemy.getFutureYLinear( time );
+
+                double absDeg = absoluteBearing( getX(),
+                                getY(),
+                                futureX,
+                                futureY );
+
+                // turn the gun to the predicted x,y location
+                setTurnGunRight( normalizeBearing( absDeg - getGunHeading() ) );
             }
-            else
+            else //If we are using stop go then circular is almost always better
             {
-                //If you are low on energy, keep it at a low firepower
-                firePower = 1.2;
+                // calculate speed of bullet
+                double bulletSpeed = 20 - firePower * 3;
+
+                // distance = rate * time, solved for time
+                long time = (long)( enemy.getDistance() / bulletSpeed );
+
+                // calculate gun turn to predicted x,y location
+                double futureX = enemy.getX();
+                double futureY = enemy.getY();
+
+                //iterate to refine circular approximation
+                for ( int i = 0; i < 10; i++ )
+                {
+                    //Compute new time as distance / rate
+                    time = (long)( Point2D.distance( getX(),
+                                    getY(),
+                                    futureX,
+                                    futureY ) / bulletSpeed );
+
+                    //Get new, better futureX and futureY coordinates
+                    futureX = enemy.getFutureXCircular( time );
+                    futureY = enemy.getFutureYCircular( time );
+                }
+
+                //Find the absolute heading of future enemy
+                double absDeg = absoluteBearing( getX(),
+                                getY(),
+                                futureX,
+                                futureY );
+
+                // turn the gun to the predicted angle
+                setTurnGunRight( normalizeBearing( absDeg - getGunHeading() ) );
             }
-
-            // calculate speed of bullet
-            double bulletSpeed = 20 - firePower * 3;
-            // distance = rate * time, solved for time
-            long time = (long)( enemy.getDistance() / bulletSpeed );
-
-            // calculate gun turn to predicted x,y location
-            double futureX = enemy.getFutureX( time );
-            double futureY = enemy.getFutureY( time );
-
-            double absDeg = absoluteBearing( getX(), getY(), futureX, futureY );
-
-            // turn the gun to the predicted x,y location
-            setTurnGunRight( normalizeBearing( absDeg - getGunHeading() ) );
 
             // if the gun is cool and we're pointed in the right direction,
             // shoot!
@@ -762,7 +803,8 @@ public class TheCarver extends AdvancedRobot
 
             //Turn, accounting for direction flip by adding 180 degrees
             setTurnRightRadians( Utils.normalRelativeAngle(
-                            Math.atan2( goalX - getX(), goalY - getY() ) + Math.PI / 2 - direction
+                            Math.atan2( goalX - getX(), goalY - getY() )
+                                            + Math.PI / 2 - direction
                                             - getHeadingRadians() ) );
         }
     }
@@ -843,7 +885,7 @@ public class TheCarver extends AdvancedRobot
 
         /**
          * Move randomly in order to counter pattern matching
-         *
+         * <p/>
          * Source: Robocode Acero Nanobot
          * http://robowiki.net/wiki/Acero
          */
@@ -897,7 +939,7 @@ public class TheCarver extends AdvancedRobot
 
         /**
          * Move start/stop to counter linear+circular targeting
-         *
+         * <p/>
          * Source: Robocode Acero Nanobot
          * http://robowiki.net/wiki/Acero
          */
@@ -966,7 +1008,7 @@ public class TheCarver extends AdvancedRobot
         /**
          * Dispatches to appropriate move method
          * based on currently chosen movement
-         *
+         * <p/>
          * Source: Robocode LemonDropBot
          * github.com/axelson/ICS606-Robocode/
          */
@@ -977,10 +1019,12 @@ public class TheCarver extends AdvancedRobot
             if ( hist.chosenMovement < 105 )
             {
                 oscillate();
+                isMovementOne = true;
             }
             else if ( hist.chosenMovement >= 105 && hist.chosenMovement < 210 )
             {
                 stopAndGo();
+                isMovementOne = false;
             }
         }
     }
